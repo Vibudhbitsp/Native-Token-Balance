@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Token Balance Checker</title>
+    <style>
+        body {
+            font-family: "Arial", sans-serif;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background-color: #404f99;
+        }
+
+        #result {
+            text-align: center;
+            background-color: #ffffff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        h1 {
+            color: #333;
+        }
+
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            margin-top: 20px;
+            transition: background-color 0.3s ease;
+        }
+
+        button:hover {
+            background-color: #2980b9;
+        }
+
+        #balance {
+            margin-top: 20px;
+            font-size: 18px;
+            color: #333;
+        }
+
+        #loading {
+            display: none;
+            margin-top: 20px;
+            color: #333;
+        }
+    </style>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/web3/1.5.2/web3.min.js"></script>
+</head>
+<body>
+    <div id="result">
+        <h1>Token Balance Checker</h1>
+        <button onclick="connectWallet()">Connect Wallet</button>
+        <div id="loading">Connecting...</div>
+        <p id="balance"></p>
+        <!-- <p id="percentageChange"></p> -->
+    </div>
+
+    <script>
+        const balanceHistory_mantle = [];
+        const balanceHistory_linea = [];
+        const balanceHistory_kroma = [];
+
+        const chainConfig = {
+            mantle: {
+                contractAddress: "0xDCBc586cAb42a1D193CaCD165a81E5fbd9B428d7",
+                chainId: 5000, // Ethereum Mainnet
+            },
+            linea: {
+                contractAddress: "0xDCBc586cAb42a1D193CaCD165a81E5fbd9B428d7",
+                chainId: 59144, // Custom ID for Linea
+            },
+            kroma: {
+                contractAddress: "0x7afb9de72A9A321fA535Bb36b7bF0c987b42b859",
+                chainId: 255, // Custom ID for Kroma
+            },
+        };
+
+        async function connectWallet() {
+            const connectButton = document.querySelector('button');
+            const loadingIndicator = document.getElementById('loading');
+
+            connectButton.disabled = true;
+            loadingIndicator.style.display = 'inline';
+
+            if (window.ethereum) {
+                try {
+                    // Request account access
+                    const accounts = await window.ethereum.request({
+                        method: "eth_requestAccounts",
+                    });
+                    if (accounts.length > 0) {
+                        // Get the chain parameter based on the network ID
+                        const chainId = await window.ethereum.request({
+                            method: "net_version",
+                        });
+
+                        // Get the chain parameter based on the network ID
+                        let chain;
+                        for (const key in chainConfig) {
+                            if (chainConfig[key].chainId == chainId) {
+                                chain = key;
+                                break;
+                            }
+                        }
+
+                        if (chain) {
+                            checkTokenBalance(chain);
+                        } else {
+                            alert(
+                                "Unsupported network. Please connect to Mantle, Linea, or Kroma."
+                            );
+                        }
+                    } else {
+                        alert(
+                            "Wallet connection denied. Please make sure to approve the connection in MetaMask."
+                        );
+                    }
+                } catch (error) {
+                    console.error(error);
+                    alert(
+                        "Error connecting to wallet. Please make sure your wallet is unlocked and connected."
+                    );
+                } finally {
+                    connectButton.disabled = false;
+                    loadingIndicator.style.display = 'none';
+                }
+            } else {
+                alert(
+                    "Please install a wallet like MetaMask to use this application."
+                );
+                connectButton.disabled = false;
+                loadingIndicator.style.display = 'none';
+            }
+        }
+
+        document.addEventListener("DOMContentLoaded", function () {
+            // Check if the wallet is already connected
+            if (window.ethereum && window.ethereum.selectedAddress) {
+                // Get the network ID
+                window.ethereum.request({ method: "net_version" }).then((chainId) => {
+                    // Get the chain parameter based on the network ID
+                    let chain;
+                    for (const key in chainConfig) {
+                        if (chainConfig[key].chainId == chainId) {
+                            chain = key;
+                            break;
+                        }
+                    }
+
+                    if (chain) {
+                        checkTokenBalance(chain);
+                    } else {
+                        alert(
+                            "Unsupported network. Please connect to Mantle, Linea, or Kroma."
+                        );
+                    }
+                });
+            }
+        });
+
+        async function checkTokenBalance(chain) {
+            const web3 = new Web3(window.ethereum);
+
+            try {
+                // Get the selected account
+                const accounts = await web3.eth.getAccounts();
+                const account = accounts[0];
+
+                if (!account) {
+                    throw new Error(
+                        "No account found. Please make sure you have a valid Ethereum wallet connected."
+                    );
+                }
+
+                // Get the token balance
+                const contractAddress = chainConfig[chain].contractAddress;
+                const balance = await web3.eth.getBalance(contractAddress);
+                document.getElementById(
+                    "balance"
+                ).innerText = `Token Balance (${chain}): ${web3.utils.fromWei(
+                    balance
+                )} ETH`;
+
+                // Fetch the percentage change in the last 12 hours
+                const twelveHoursAgo = Math.floor(
+                    (Date.now() - 12 * 60 * 60 * 1000) / 1000
+                );
+
+                const balanceBefore = await web3.eth.getBalance(contractAddress);
+
+                // const percentageChange =
+                //     ((balance - balanceBefore) / balanceBefore) * 100;
+
+                // document.getElementById(
+                //     "percentageChange"
+                // ).innerText = `Percentage Change (Last 12 Hours): ${percentageChange.toFixed(
+                //     2
+                // )}%`;
+
+                // Alert if the balance reduces by 10%
+                // if (percentageChange < -10) {
+                //     alert(
+                //         `Warning (${chain}): Your balance has decreased by more than 10% in the last 12 hours!`
+                //     );
+                // }
+            } catch (error) {
+                console.error(error);
+                // alert(error.message);
+            }
+        }
+    </script>
+</body>
+</html>
